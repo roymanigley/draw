@@ -1,4 +1,4 @@
-const CACHE = 'infinite-canvas-v1';
+const CACHE = 'royman-draw-v2';
 const ASSETS = [
 	'./',
 	'./index.html',
@@ -8,11 +8,11 @@ const ASSETS = [
 ];
 
 // Install: cache all assets
+// Do NOT call skipWaiting() here — wait for user to confirm the reload
 self.addEventListener('install', e => {
 	e.waitUntil(
-		caches.open(CACHE).then(cache => cache.addAll(ASSETS.filter(a => !a.endsWith('.png'))))
+		caches.open(CACHE).then(cache => cache.addAll(ASSETS))
 	);
-	self.skipWaiting();
 });
 
 // Activate: clean up old caches
@@ -31,7 +31,6 @@ self.addEventListener('fetch', e => {
 		caches.match(e.request).then(cached => {
 			if (cached) return cached;
 			return fetch(e.request).then(response => {
-				// Cache successful GET requests
 				if (e.request.method === 'GET' && response.status === 200) {
 					const clone = response.clone();
 					caches.open(CACHE).then(cache => cache.put(e.request, clone));
@@ -40,4 +39,9 @@ self.addEventListener('fetch', e => {
 			}).catch(() => caches.match('./index.html'));
 		})
 	);
+});
+
+// User clicked "Reload" in the update banner → activate the waiting SW
+self.addEventListener('message', e => {
+	if (e.data?.type === 'SKIP_WAITING') self.skipWaiting();
 });

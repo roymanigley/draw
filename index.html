@@ -2,14 +2,21 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Infinite Canvas</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>RoyMan Draw</title>
+<meta name="description" content="An infinite drawing canvas — draw anywhere, zoom & pan freely.">
+<meta name="theme-color" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="RoyMan Draw">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { background: #000; overflow: hidden; width: 100vw; height: 100vh; cursor: crosshair; font-family: 'Courier New', monospace; }
   #canvas { position: absolute; top: 0; left: 0; }
 
-  /* ── Bottom toolbar ── */
   #ui {
     position: fixed;
     bottom: 28px;
@@ -32,7 +39,7 @@
 
   .tool-btn {
     background: none;
-    border: 1px solid rgba(255,255,255,0.2);
+    border: none;
     color: rgba(255,255,255,0.6);
     width: 36px;
     height: 36px;
@@ -70,7 +77,6 @@
     cursor: pointer;
   }
 
-  /* ── Sidebar panel ── */
   #sidebar {
     position: fixed;
     top: 0; right: 0;
@@ -198,7 +204,6 @@
     padding: 30px 0;
   }
 
-  /* ── HUD ── */
   #zoom-indicator {
     position: fixed;
     top: 20px; right: 24px;
@@ -211,6 +216,11 @@
   }
   body.sidebar-open #zoom-indicator { right: 284px; }
 
+  .hint-mobile { display: none; }
+  @media (hover: none) and (pointer: coarse) {
+    .hint-desktop { display: none; }
+    .hint-mobile { display: inline; }
+  }
   #hint {
     position: fixed;
     top: 20px; left: 24px;
@@ -234,7 +244,6 @@
     pointer-events: none;
   }
 
-  /* toast */
   #toast {
     position: fixed;
     bottom: 90px;
@@ -261,14 +270,12 @@
 
 <div id="zoom-indicator">100%</div>
 <div id="hint">
-  draw · scroll to zoom<br>
-  space+drag to pan<br>
-  ctrl+z undo · ctrl+y redo
+  <span class="hint-desktop">right click + drag to move around<br>ctrl+z undo · ctrl+y redo</span>
+  <span class="hint-mobile">draw with 1 finger<br>2 fingers to move &amp; zoom</span>
 </div>
 <div id="current-drawing-name"></div>
 <div id="toast"></div>
 
-<!-- Sidebar -->
 <div id="sidebar">
   <div id="sidebar-header">
     <span>Saved Drawings</span>
@@ -281,21 +288,52 @@
   <div id="drawings-list"></div>
 </div>
 
-<!-- Bottom toolbar -->
 <div id="ui">
-  <button class="tool-btn active" id="btn-pen" title="Pen (P)">✏</button>
-  <button class="tool-btn" id="btn-erase" title="Eraser (E)">◻</button>
+  <button class="tool-btn active" id="btn-pen" title="Pen (P)">
+    <svg data-slot="icon" fill="none" stroke-width="1.5" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125"></path>
+    </svg>
+  </button>
+  <button class="tool-btn" id="btn-erase" title="Eraser (E)">
+    <svg data-slot="icon" fill="none" stroke-width="1.5" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M12 9.75 14.25 12m0 0 2.25 2.25M14.25 12l2.25-2.25M14.25 12 12 14.25m-2.58 4.92-6.374-6.375a1.125 1.125 0 0 1 0-1.59L9.42 4.83c.21-.211.497-.33.795-.33H19.5a2.25 2.25 0 0 1 2.25 2.25v10.5a2.25 2.25 0 0 1-2.25 2.25h-9.284c-.298 0-.585-.119-.795-.33Z"></path>
+    </svg>
+  </button>
+  <label id="color-btn" title="Pen color" style="position:relative;width:36px;height:36px;border-radius:50%;border:1px solid rgba(255,255,255,0.2);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;">
+    <span id="color-swatch" style="width:18px;height:18px;border-radius:50%;background:#56cae1;pointer-events:none;"></span>
+    <input type="color" id="color-picker" value="#56cae1" style="position:absolute;opacity:0;width:100%;height:100%;cursor:pointer;top:0;left:0;">
+  </label>
   <div class="divider"></div>
   <input type="range" id="size-slider" min="1" max="60" value="4">
   <div class="divider"></div>
-  <button class="tool-btn" id="btn-undo" title="Undo (Ctrl+Z)" disabled>↩</button>
-  <button class="tool-btn" id="btn-redo" title="Redo (Ctrl+Y)" disabled>↪</button>
+  <button class="tool-btn" id="btn-undo" title="Undo (Ctrl+Z)" disabled>
+    <svg data-slot="icon" fill="none" stroke-width="1.5" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3"></path>
+    </svg>
+  </button>
+  <button class="tool-btn" id="btn-redo" title="Redo (Ctrl+Y)" disabled>
+    <svg data-slot="icon" fill="none" stroke-width="1.5" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path stroke-linecap="round" stroke-linejoin="round" d="m15 15 6-6m0 0-6-6m6 6H9a6 6 0 0 0 0 12h3"></path>
+    </svg>
+  </button>
   <div class="divider"></div>
-  <button class="tool-btn" id="btn-clear" title="Clear canvas">⌫</button>
+  <button class="tool-btn" id="btn-clear" title="Clear canvas">
+    <svg data-slot="icon" fill="none" stroke-width="1.5" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"></path>
+    </svg>
+  </button>
   <div class="divider"></div>
-  <button class="tool-btn" id="btn-library" title="Saved drawings">☰</button>
+  <button class="tool-btn" id="btn-download" title="Download as SVG">
+    <svg data-slot="icon" fill="none" stroke-width="1.5" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m.75 12 3 3m0 0 3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"></path>
+    </svg>
+  </button>
   <div class="divider"></div>
-  <button class="tool-btn" id="btn-download" title="Download as JPEG">↓</button>
+  <button class="tool-btn" id="btn-library" title="Saved drawings">
+    <svg data-slot="icon" fill="none" stroke-width="1.5" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 5.25h16.5m-16.5 4.5h16.5m-16.5 4.5h16.5m-16.5 4.5h16.5"></path>
+    </svg>
+  </button>
 </div>
 
 <script>
@@ -308,15 +346,20 @@ let vpX = 0, vpY = 0, vpScale = 1;
 // ── Drawing state ──────────────────────────────────────────────────────────
 let tool = 'pen';
 let brushSize = 4;
+let penColor = '#56cae1';
 let isDrawing = false;
 
+// Minimum screen-space stroke width — strokes never appear thinner than this
+// no matter how far you zoom out
+const MIN_SCREEN_WIDTH = 1.0;
+
 // ── Undo / redo stacks ─────────────────────────────────────────────────────
-let strokes = [];      // committed strokes
-let redoStack = [];    // strokes popped by undo
+let strokes = [];
+let redoStack = [];
 let currentStroke = null;
 
 // ── Session tracking ───────────────────────────────────────────────────────
-let currentDrawingKey = null;   // localStorage key of the open drawing, null = unsaved new
+let currentDrawingKey = null;
 let currentDrawingName = '';
 
 // ── Pan state ──────────────────────────────────────────────────────────────
@@ -359,9 +402,12 @@ function drawStroke(stroke) {
     ctx.strokeStyle = 'rgba(0,0,0,1)';
   } else {
     ctx.globalCompositeOperation = 'source-over';
-    ctx.strokeStyle = '#fff';
+    ctx.strokeStyle = stroke.color || '#56cae1';
   }
-  ctx.lineWidth = stroke.size;
+  // Enforce minimum screen-space width:
+  // stroke.size is in world units; divide by vpScale to get screen pixels.
+  // If that's below MIN_SCREEN_WIDTH, use MIN_SCREEN_WIDTH / vpScale instead.
+  ctx.lineWidth = Math.max(stroke.size, MIN_SCREEN_WIDTH / vpScale);
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   ctx.beginPath();
@@ -384,7 +430,7 @@ function drawStroke(stroke) {
 // ─────────────────────────────────────────────────────────────────────────
 function pushStroke(stroke) {
   strokes.push(stroke);
-  redoStack = [];           // new stroke invalidates redo history
+  redoStack = [];
   updateUndoButtons();
 }
 
@@ -410,7 +456,7 @@ function updateUndoButtons() {
 // ─────────────────────────────────────────────────────────────────────────
 // localStorage helpers
 // ─────────────────────────────────────────────────────────────────────────
-const LS_INDEX = 'infiniteCanvas_index'; // JSON array of { key, name, savedAt }
+const LS_INDEX = 'infiniteCanvas_index';
 
 function getIndex() {
   try { return JSON.parse(localStorage.getItem(LS_INDEX)) || []; }
@@ -429,14 +475,12 @@ function saveDrawing(name) {
     showToast('Storage full — try clearing old drawings');
     return;
   }
-  // update index
   let idx = getIndex();
   const existing = idx.findIndex(e => e.key === key);
   const entry = { key, name, savedAt: data.savedAt };
   if (existing >= 0) idx[existing] = entry;
   else idx.unshift(entry);
   setIndex(idx);
-
   currentDrawingKey = key;
   currentDrawingName = name;
   document.getElementById('current-drawing-name').textContent = name;
@@ -514,9 +558,6 @@ function fmtDate(ts) {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// Sidebar open/close
-// ─────────────────────────────────────────────────────────────────────────
 function openSidebar() {
   document.getElementById('sidebar').classList.add('open');
   document.body.classList.add('sidebar-open');
@@ -527,9 +568,6 @@ function closeSidebar() {
   document.body.classList.remove('sidebar-open');
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// Toast
-// ─────────────────────────────────────────────────────────────────────────
 let toastTimer = null;
 function showToast(msg) {
   const el = document.getElementById('toast');
@@ -539,9 +577,6 @@ function showToast(msg) {
   toastTimer = setTimeout(() => el.classList.remove('show'), 2000);
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// Input helpers
-// ─────────────────────────────────────────────────────────────────────────
 function getPos(e) {
   const r = canvas.getBoundingClientRect();
   if (e.touches) return { x: e.touches[0].clientX - r.left, y: e.touches[0].clientY - r.top };
@@ -552,18 +587,18 @@ function getPos(e) {
 // Mouse events
 // ─────────────────────────────────────────────────────────────────────────
 canvas.addEventListener('mousedown', e => {
-  if (e.button === 1 || (e.button === 0 && spaceDown)) {
+  if (e.button === 1) e.preventDefault();
+  if (e.button === 1 || e.button === 2 || (e.button === 0 && spaceDown)) {
     isPanning = true;
     panStart = { x: e.clientX, y: e.clientY };
     vpAtPanStart = { x: vpX, y: vpY };
     canvas.style.cursor = 'grab';
-    e.preventDefault();
     return;
   }
   if (e.button !== 0) return;
   const wp = screenToWorld(...Object.values(getPos(e)));
   isDrawing = true;
-  currentStroke = { pts: [wp], size: brushSize, erase: tool === 'erase' };
+  currentStroke = { pts: [wp], size: brushSize, color: penColor, erase: tool === 'erase' };
   render();
 });
 
@@ -589,14 +624,16 @@ function finishDraw() {
 function finishPan() {
   if (!isPanning) return;
   isPanning = false;
-  canvas.style.cursor = spaceDown ? 'grab' : 'crosshair';
+  if (spaceDown) { canvas.style.cursor = 'grab'; } else { updateCursor(); }
 }
 
-canvas.addEventListener('mouseup', e => { finishPan(); finishDraw(); });
+canvas.addEventListener('mouseup', e => {
+  if (e.button === 1) e.preventDefault();
+  finishPan(); finishDraw();
+});
 canvas.addEventListener('mouseleave', () => { finishDraw(); });
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 
-// Zoom
 canvas.addEventListener('wheel', e => {
   e.preventDefault();
   const before = screenToWorld(e.clientX, e.clientY);
@@ -608,9 +645,7 @@ canvas.addEventListener('wheel', e => {
   render();
 }, { passive: false });
 
-// Keyboard
 window.addEventListener('keydown', e => {
-  // Don't intercept while typing in input
   if (e.target.tagName === 'INPUT') return;
   if (e.code === 'Space') { spaceDown = true; canvas.style.cursor = 'grab'; e.preventDefault(); return; }
   if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); return; }
@@ -620,16 +655,14 @@ window.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); trySave(); }
 });
 window.addEventListener('keyup', e => {
-  if (e.code === 'Space') { spaceDown = false; canvas.style.cursor = 'crosshair'; }
+  if (e.code === 'Space') { spaceDown = false; updateCursor(); }
 });
 
 // ─────────────────────────────────────────────────────────────────────────
 // Touch — Google Maps style
-//   1 finger  → draw
-//   2 fingers → pan + pinch-zoom simultaneously, with momentum on release
 // ─────────────────────────────────────────────────────────────────────────
-let touch2 = null;   // state of last 2-finger frame { midX, midY, dist, _vx, _vy }
-let momentum = null; // inertia after 2-finger lift
+let touch2 = null;
+let momentum = null;
 
 function stopMomentum() {
   if (momentum) { cancelAnimationFrame(momentum.rafId); momentum = null; }
@@ -651,14 +684,8 @@ function startMomentum(vx, vy) {
 canvas.addEventListener('touchstart', e => {
   e.preventDefault();
   stopMomentum();
-
   if (e.touches.length >= 2) {
-    // Abort any in-progress drawing stroke — enter pan/zoom mode
-    if (isDrawing) {
-      isDrawing = false;
-      currentStroke = null;
-      render();
-    }
+    if (isDrawing) { isDrawing = false; currentStroke = null; render(); }
     const t0 = e.touches[0], t1 = e.touches[1];
     touch2 = {
       midX: (t0.clientX + t1.clientX) / 2,
@@ -668,48 +695,35 @@ canvas.addEventListener('touchstart', e => {
     };
     return;
   }
-
-  // 1 finger → draw
   touch2 = null;
   const wp = screenToWorld(...Object.values(getPos(e)));
   isDrawing = true;
-  currentStroke = { pts: [wp], size: brushSize, erase: tool === 'erase' };
+  currentStroke = { pts: [wp], size: brushSize, color: penColor, erase: tool === 'erase' };
   render();
 }, { passive: false });
 
 canvas.addEventListener('touchmove', e => {
   e.preventDefault();
-
   if (e.touches.length >= 2) {
     const t0 = e.touches[0], t1 = e.touches[1];
     const midX = (t0.clientX + t1.clientX) / 2;
     const midY = (t0.clientY + t1.clientY) / 2;
-    const dist  = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
-
+    const dist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
     if (touch2) {
-      // 1. Pinch-zoom: anchor the world point under the midpoint
       const worldMid = screenToWorld(midX, midY);
       vpScale = Math.max(0.02, Math.min(50, vpScale * (dist / touch2.dist)));
       vpX = worldMid.x - midX / vpScale;
       vpY = worldMid.y - midY / vpScale;
-
-      // 2. Pan: midpoint delta in screen space → world space
       vpX -= (midX - touch2.midX) / vpScale;
       vpY -= (midY - touch2.midY) / vpScale;
-
-      // Store velocity (screen pixels/frame) for momentum
       touch2._vx = midX - touch2.midX;
       touch2._vy = midY - touch2.midY;
-
       document.getElementById('zoom-indicator').textContent = Math.round(vpScale * 100) + '%';
       render();
     }
-
     touch2 = { midX, midY, dist, _vx: touch2?._vx ?? 0, _vy: touch2?._vy ?? 0 };
     return;
   }
-
-  // 1 finger → draw
   if (!isDrawing) return;
   const wp = screenToWorld(...Object.values(getPos(e)));
   currentStroke.pts.push(wp);
@@ -718,16 +732,13 @@ canvas.addEventListener('touchmove', e => {
 
 canvas.addEventListener('touchend', e => {
   e.preventDefault();
-
   if (touch2 && e.touches.length < 2) {
-    // Fling: launch momentum from last known velocity
     const vx = touch2._vx || 0;
     const vy = touch2._vy || 0;
     touch2 = null;
     if (Math.hypot(vx, vy) > 0.5) startMomentum(vx, vy);
     return;
   }
-
   touch2 = null;
   finishDraw();
 }, { passive: false });
@@ -745,31 +756,66 @@ function setTool(t) {
   tool = t;
   document.getElementById('btn-pen').classList.toggle('active', t === 'pen');
   document.getElementById('btn-erase').classList.toggle('active', t === 'erase');
+  // Dim color button when eraser is active
+  document.getElementById('color-btn').style.opacity = t === 'erase' ? '0.35' : '1';
+  updateCursor();
+}
+
+function makeEraserCursor(size) {
+  // Draw a circle cursor sized to the current brush on a canvas, return as data URL
+  const screenSize = Math.max(size * vpScale, 8);
+  const dim = Math.ceil(screenSize) + 4;
+  const c = document.createElement('canvas');
+  c.width = dim; c.height = dim;
+  const cx = dim / 2, cy = dim / 2, r = screenSize / 2;
+  const dc = c.getContext('2d');
+  dc.beginPath();
+  dc.arc(cx, cy, r, 0, Math.PI * 2);
+  dc.strokeStyle = 'rgba(255,255,255,0.9)';
+  dc.lineWidth = 1.5;
+  dc.stroke();
+  // small crosshair dot in center
+  dc.beginPath();
+  dc.arc(cx, cy, 1.5, 0, Math.PI * 2);
+  dc.fillStyle = 'rgba(255,255,255,0.7)';
+  dc.fill();
+  const hotspot = Math.floor(dim / 2);
+  return `url(${c.toDataURL()}) ${hotspot} ${hotspot}, crosshair`;
+}
+
+function updateCursor() {
+  if (isPanning) return;
+  if (tool === 'erase') {
+    canvas.style.cursor = makeEraserCursor(brushSize);
+  } else {
+    canvas.style.cursor = 'crosshair';
+  }
 }
 
 function trySave() {
   const nameInput = document.getElementById('save-name');
   const name = nameInput.value.trim() || currentDrawingName || ('Drawing ' + new Date().toLocaleTimeString());
   nameInput.value = name;
-  // If the name changed from the loaded drawing, treat it as a brand new entry
-  if (currentDrawingKey && name !== currentDrawingName) {
-    currentDrawingKey = null;
-  }
+  if (currentDrawingKey && name !== currentDrawingName) currentDrawingKey = null;
   saveDrawing(name);
 }
 
+document.getElementById('color-picker').addEventListener('input', e => {
+  penColor = e.target.value;
+  document.getElementById('color-swatch').style.background = penColor;
+  setTool('pen'); // switch back to pen when color picked
+});
 document.getElementById('btn-pen').addEventListener('click', () => setTool('pen'));
 document.getElementById('btn-erase').addEventListener('click', () => setTool('erase'));
 document.getElementById('btn-undo').addEventListener('click', undo);
 document.getElementById('btn-redo').addEventListener('click', redo);
 document.getElementById('btn-clear').addEventListener('click', () => {
   if (!strokes.length) return;
-  // Push all current strokes onto redo stack so Ctrl+Z can restore them
   redoStack.push(...[...strokes].reverse());
   strokes = [];
   updateUndoButtons();
   render();
-  showToast('Canvas cleared — Ctrl+Z to undo');
+  showToast('Canvas cleared');
 });
 document.getElementById('btn-library').addEventListener('click', () => {
   document.getElementById('sidebar').classList.contains('open') ? closeSidebar() : openSidebar();
@@ -781,67 +827,163 @@ document.getElementById('save-name').addEventListener('keydown', e => {
 });
 document.getElementById('size-slider').addEventListener('input', e => {
   brushSize = parseInt(e.target.value);
+  updateCursor();
 });
 
+// ─────────────────────────────────────────────────────────────────────────
+// SVG Export
+// Converts all non-erased strokes to SVG paths.
+// Eraser strokes are handled via SVG clipPath masking so the result
+// looks identical to the canvas render.
+// ─────────────────────────────────────────────────────────────────────────
 document.getElementById('btn-download').addEventListener('click', () => {
-  // Render onto a temporary canvas with black background (JPEG has no transparency)
-  const tmp = document.createElement('canvas');
-  tmp.width = canvas.width;
-  tmp.height = canvas.height;
-  const tctx = tmp.getContext('2d');
-  tctx.fillStyle = '#000';
-  tctx.fillRect(0, 0, tmp.width, tmp.height);
-  // Draw all strokes at current viewport
-  tctx.save();
-  tctx.scale(vpScale, vpScale);
-  tctx.translate(-vpX, -vpY);
+  if (!strokes.length) { showToast('Nothing to export'); return; }
+
+  // Compute bounding box of all (non-erase) stroke points
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const s of strokes) {
-    const pts = s.pts;
-    if (!pts.length) continue;
-    tctx.save();
-    if (s.erase) {
-      tctx.globalCompositeOperation = 'destination-out';
-      tctx.strokeStyle = 'rgba(0,0,0,1)';
-    } else {
-      tctx.globalCompositeOperation = 'source-over';
-      tctx.strokeStyle = '#fff';
+    if (s.erase) continue;
+    for (const p of s.pts) {
+      if (p.x < minX) minX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y > maxY) maxY = p.y;
     }
-    tctx.lineWidth = s.size;
-    tctx.lineCap = 'round';
-    tctx.lineJoin = 'round';
-    tctx.beginPath();
-    tctx.moveTo(pts[0].x, pts[0].y);
+  }
+  if (minX === Infinity) { showToast('Nothing to export'); return; }
+
+  // Add padding equal to the largest stroke size
+  const maxSize = strokes.reduce((m, s) => Math.max(m, s.size), 0);
+  const pad = maxSize;
+  minX -= pad; minY -= pad; maxX += pad; maxY += pad;
+  const W = maxX - minX;
+  const H = maxY - minY;
+
+  // Build SVG path "d" from stroke points using quadratic bezier
+  function strokeToPath(pts) {
+    if (!pts.length) return '';
+    let d = `M ${(pts[0].x - minX).toFixed(2)} ${(pts[0].y - minY).toFixed(2)}`;
     for (let i = 1; i < pts.length; i++) {
       if (i < pts.length - 1) {
-        const mx = (pts[i].x + pts[i+1].x) / 2;
-        const my = (pts[i].y + pts[i+1].y) / 2;
-        tctx.quadraticCurveTo(pts[i].x, pts[i].y, mx, my);
+        const mx = ((pts[i].x + pts[i+1].x) / 2 - minX).toFixed(2);
+        const my = ((pts[i].y + pts[i+1].y) / 2 - minY).toFixed(2);
+        const cx = (pts[i].x - minX).toFixed(2);
+        const cy = (pts[i].y - minY).toFixed(2);
+        d += ` Q ${cx} ${cy} ${mx} ${my}`;
       } else {
-        tctx.lineTo(pts[i].x, pts[i].y);
+        d += ` L ${(pts[i].x - minX).toFixed(2)} ${(pts[i].y - minY).toFixed(2)}`;
       }
     }
-    tctx.stroke();
-    tctx.restore();
+    return d;
   }
-  tctx.restore();
 
-  const filename = (currentDrawingName || 'drawing') + '.jpg';
-  tmp.toBlob(blob => {
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.download = filename;
-    link.href = url;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-    showToast('Downloaded "' + filename + '"');
-  }, 'image/jpeg', 0.95);
+  // Each draw stroke gets its own clipPath that subtracts all subsequent erase strokes
+  // Simple approach: render draw strokes, then cover erased areas with black (background colour)
+  // We use a <mask> per draw stroke that clips out all erase strokes that came after it.
+  let defs = '';
+  let paths = '';
+
+  strokes.forEach((s, i) => {
+    if (s.erase) return; // handled via masking below
+
+    // Find all erase strokes that came after this draw stroke
+    const eraseAfter = strokes.slice(i + 1).filter(e => e.erase);
+
+    if (eraseAfter.length > 0) {
+      const maskId = `m${i}`;
+      // Mask: white = show, black = hide
+      let erasePaths = eraseAfter.map(es =>
+        `<path d="${strokeToPath(es.pts)}" stroke="black" stroke-width="${es.size}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`
+      ).join('');
+      defs += `<mask id="${maskId}">
+        <rect width="${W.toFixed(2)}" height="${H.toFixed(2)}" fill="white"/>
+        ${erasePaths}
+      </mask>`;
+      paths += `<path d="${strokeToPath(s.pts)}" stroke="${s.color || 'white'}" stroke-width="${s.size}" stroke-linecap="round" stroke-linejoin="round" fill="none" mask="url(#${maskId})"/>`;
+    } else {
+      paths += `<path d="${strokeToPath(s.pts)}" stroke="${s.color || 'white'}" stroke-width="${s.size}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
+    }
+  });
+
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${W.toFixed(2)}" height="${H.toFixed(2)}" viewBox="0 0 ${W.toFixed(2)} ${H.toFixed(2)}">
+  <defs>${defs}</defs>
+  <rect width="${W.toFixed(2)}" height="${H.toFixed(2)}" fill="black"/>
+  ${paths}
+</svg>`;
+
+  const blob = new Blob([svg], { type: 'image/svg+xml' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.download = (currentDrawingName || 'drawing') + '.svg';
+  link.href = url;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  showToast('Downloaded SVG');
 });
 
 window.addEventListener('resize', resize);
 resize();
 updateUndoButtons();
+</script>
+<div id="update-banner" style="
+  display:none;
+  position:fixed;
+  top:16px;left:50%;transform:translateX(-50%);
+  background:rgba(255,255,255,0.1);
+  border:1px solid rgba(255,255,255,0.25);
+  backdrop-filter:blur(12px);
+  color:#fff;font-family:'Courier New',monospace;font-size:12px;
+  padding:10px 18px;border-radius:24px;
+  z-index:500;display:none;align-items:center;gap:12px;white-space:nowrap;
+">
+  <span>🔄 New version available</span>
+  <button id="btn-update" style="background:#fff;color:#000;border:none;border-radius:12px;padding:4px 12px;font-family:'Courier New',monospace;font-size:11px;font-weight:bold;cursor:pointer;">Reload</button>
+  <button id="btn-dismiss-update" style="background:none;border:none;color:rgba(255,255,255,0.4);cursor:pointer;font-size:16px;line-height:1;">✕</button>
+</div>
+
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').then(reg => {
+      // Check for updates every 60 seconds
+      setInterval(() => reg.update(), 60000);
+
+      const showBanner = () => {
+        const banner = document.getElementById('update-banner');
+        banner.style.display = 'flex';
+      };
+
+      // New SW waiting immediately on first load
+      if (reg.waiting) { showBanner(); }
+
+      // New SW found after update check
+      reg.addEventListener('updatefound', () => {
+        const newWorker = reg.installing;
+        newWorker.addEventListener('statechange', () => {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            showBanner();
+          }
+        });
+      });
+
+      // Reload once the new SW has taken control
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!refreshing) { refreshing = true; window.location.reload(); }
+      });
+
+      document.getElementById('btn-update').addEventListener('click', () => {
+        if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+      });
+      document.getElementById('btn-dismiss-update').addEventListener('click', () => {
+        document.getElementById('update-banner').style.display = 'none';
+      });
+    }).catch(e => console.log('SW failed', e));
+  });
+}
 </script>
 </body>
 </html>
