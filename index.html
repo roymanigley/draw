@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Infinite Canvas</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #000; overflow: hidden; width: 100vw; height: 100vh; cursor: crosshair; font-family: 'Courier New', monospace; }
+  #canvas { position: absolute; top: 0; left: 0; }
+
+  /* ── Bottom toolbar ── */
+  #ui {
+    position: fixed;
+    bottom: 28px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.12);
+    backdrop-filter: blur(12px);
+    padding: 8px 14px;
+    border-radius: 40px;
+    z-index: 100;
+    user-select: none;
+    white-space: nowrap;
+    max-width: calc(100vw - 32px);
+    overflow-x: auto;
+  }
+
+  .tool-btn {
+    background: none;
+    border: 1px solid rgba(255,255,255,0.2);
+    color: rgba(255,255,255,0.6);
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+  .tool-btn:hover { background: rgba(255,255,255,0.1); color: #fff; border-color: rgba(255,255,255,0.4); }
+  .tool-btn.active { background: #fff; color: #000; border-color: #fff; }
+  .tool-btn:disabled { opacity: 0.2; cursor: default; }
+  .tool-btn:disabled:hover { background: none; color: rgba(255,255,255,0.6); border-color: rgba(255,255,255,0.2); }
+
+  .divider { width: 1px; height: 24px; background: rgba(255,255,255,0.15); flex-shrink: 0; }
+
+  #size-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 72px;
+    height: 3px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+  #size-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 13px; height: 13px;
+    background: #fff;
+    border-radius: 50%;
+    cursor: pointer;
+  }
+
+  /* ── Sidebar panel ── */
+  #sidebar {
+    position: fixed;
+    top: 0; right: 0;
+    width: 260px;
+    height: 100vh;
+    background: rgba(10,10,10,0.92);
+    border-left: 1px solid rgba(255,255,255,0.08);
+    backdrop-filter: blur(16px);
+    z-index: 200;
+    display: flex;
+    flex-direction: column;
+    transform: translateX(100%);
+    transition: transform 0.25s ease;
+  }
+  #sidebar.open { transform: translateX(0); }
+
+  #sidebar-header {
+    padding: 20px 18px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  #sidebar-header span {
+    color: rgba(255,255,255,0.5);
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+  #btn-close-sidebar {
+    background: none; border: none; color: rgba(255,255,255,0.3);
+    cursor: pointer; font-size: 18px; line-height: 1;
+    transition: color 0.15s;
+  }
+  #btn-close-sidebar:hover { color: #fff; }
+
+  #save-row {
+    display: flex;
+    gap: 8px;
+    padding: 14px 18px;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+  }
+  #save-name {
+    flex: 1;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 6px;
+    color: #fff;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    padding: 6px 10px;
+    outline: none;
+  }
+  #save-name::placeholder { color: rgba(255,255,255,0.2); }
+  #save-name:focus { border-color: rgba(255,255,255,0.3); }
+  #btn-save {
+    background: #fff;
+    border: none;
+    border-radius: 6px;
+    color: #000;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: opacity 0.15s;
+    white-space: nowrap;
+  }
+  #btn-save:hover { opacity: 0.8; }
+
+  #drawings-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  #drawings-list::-webkit-scrollbar { width: 4px; }
+  #drawings-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+  .drawing-entry {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px;
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .drawing-entry:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.2); }
+  .drawing-entry.current { border-color: rgba(255,255,255,0.4); background: rgba(255,255,255,0.07); }
+  .drawing-entry-name {
+    flex: 1;
+    color: rgba(255,255,255,0.8);
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .drawing-entry-meta {
+    color: rgba(255,255,255,0.25);
+    font-size: 10px;
+    white-space: nowrap;
+  }
+  .drawing-entry-del {
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.2);
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 2px;
+    transition: color 0.15s;
+    flex-shrink: 0;
+  }
+  .drawing-entry-del:hover { color: #ff5555; }
+
+  .empty-state {
+    color: rgba(255,255,255,0.2);
+    font-size: 11px;
+    text-align: center;
+    padding: 30px 0;
+  }
+
+  /* ── HUD ── */
+  #zoom-indicator {
+    position: fixed;
+    top: 20px; right: 24px;
+    color: rgba(255,255,255,0.25);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    z-index: 100;
+    pointer-events: none;
+    transition: right 0.25s ease;
+  }
+  body.sidebar-open #zoom-indicator { right: 284px; }
+
+  #hint {
+    position: fixed;
+    top: 20px; left: 24px;
+    color: rgba(255,255,255,0.2);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    z-index: 100;
+    pointer-events: none;
+    line-height: 1.8;
+  }
+
+  #current-drawing-name {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: rgba(255,255,255,0.2);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    z-index: 100;
+    pointer-events: none;
+  }
+
+  /* toast */
+  #toast {
+    position: fixed;
+    bottom: 90px;
+    left: 50%;
+    transform: translateX(-50%) translateY(10px);
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: rgba(255,255,255,0.8);
+    font-size: 11px;
+    padding: 7px 16px;
+    border-radius: 20px;
+    opacity: 0;
+    transition: opacity 0.2s, transform 0.2s;
+    pointer-events: none;
+    z-index: 300;
+    letter-spacing: 0.05em;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+<div id="zoom-indicator">100%</div>
+<div id="hint">
+  draw · scroll to zoom<br>
+  space+drag to pan<br>
+  ctrl+z undo · ctrl+y redo
+</div>
+<div id="current-drawing-name"></div>
+<div id="toast"></div>
+
+<!-- Sidebar -->
+<div id="sidebar">
+  <div id="sidebar-header">
+    <span>Saved Drawings</span>
+    <button id="btn-close-sidebar">✕</button>
+  </div>
+  <div id="save-row">
+    <input id="save-name" type="text" placeholder="Drawing name…" maxlength="40">
+    <button id="btn-save">Save</button>
+  </div>
+  <div id="drawings-list"></div>
+</div>
+
+<!-- Bottom toolbar -->
+<div id="ui">
+  <button class="tool-btn active" id="btn-pen" title="Pen (P)">✏</button>
+  <button class="tool-btn" id="btn-erase" title="Eraser (E)">◻</button>
+  <div class="divider"></div>
+  <input type="range" id="size-slider" min="1" max="60" value="4">
+  <div class="divider"></div>
+  <button class="tool-btn" id="btn-undo" title="Undo (Ctrl+Z)" disabled>↩</button>
+  <button class="tool-btn" id="btn-redo" title="Redo (Ctrl+Y)" disabled>↪</button>
+  <div class="divider"></div>
+  <button class="tool-btn" id="btn-clear" title="Clear canvas">⌫</button>
+  <div class="divider"></div>
+  <button class="tool-btn" id="btn-library" title="Saved drawings">☰</button>
+  <div class="divider"></div>
+  <button class="tool-btn" id="btn-download" title="Download as JPEG">↓</button>
+</div>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+// ── Viewport ──────────────────────────────────────────────────────────────
+let vpX = 0, vpY = 0, vpScale = 1;
+
+// ── Drawing state ──────────────────────────────────────────────────────────
+let tool = 'pen';
+let brushSize = 4;
+let isDrawing = false;
+
+// ── Undo / redo stacks ─────────────────────────────────────────────────────
+let strokes = [];      // committed strokes
+let redoStack = [];    // strokes popped by undo
+let currentStroke = null;
+
+// ── Session tracking ───────────────────────────────────────────────────────
+let currentDrawingKey = null;   // localStorage key of the open drawing, null = unsaved new
+let currentDrawingName = '';
+
+// ── Pan state ──────────────────────────────────────────────────────────────
+let isPanning = false;
+let panStart = null;
+let vpAtPanStart = null;
+let spaceDown = false;
+
+// ─────────────────────────────────────────────────────────────────────────
+// Rendering
+// ─────────────────────────────────────────────────────────────────────────
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  render();
+}
+
+function screenToWorld(sx, sy) {
+  return { x: sx / vpScale + vpX, y: sy / vpScale + vpY };
+}
+
+function render() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.save();
+  ctx.scale(vpScale, vpScale);
+  ctx.translate(-vpX, -vpY);
+  for (const s of strokes) drawStroke(s);
+  if (currentStroke?.pts.length) drawStroke(currentStroke);
+  ctx.restore();
+}
+
+function drawStroke(stroke) {
+  const pts = stroke.pts;
+  if (!pts.length) return;
+  ctx.save();
+  if (stroke.erase) {
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.strokeStyle = 'rgba(0,0,0,1)';
+  } else {
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.strokeStyle = '#fff';
+  }
+  ctx.lineWidth = stroke.size;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) {
+    if (i < pts.length - 1) {
+      const mx = (pts[i].x + pts[i+1].x) / 2;
+      const my = (pts[i].y + pts[i+1].y) / 2;
+      ctx.quadraticCurveTo(pts[i].x, pts[i].y, mx, my);
+    } else {
+      ctx.lineTo(pts[i].x, pts[i].y);
+    }
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Undo / Redo
+// ─────────────────────────────────────────────────────────────────────────
+function pushStroke(stroke) {
+  strokes.push(stroke);
+  redoStack = [];           // new stroke invalidates redo history
+  updateUndoButtons();
+}
+
+function undo() {
+  if (!strokes.length) return;
+  redoStack.push(strokes.pop());
+  updateUndoButtons();
+  render();
+}
+
+function redo() {
+  if (!redoStack.length) return;
+  strokes.push(redoStack.pop());
+  updateUndoButtons();
+  render();
+}
+
+function updateUndoButtons() {
+  document.getElementById('btn-undo').disabled = strokes.length === 0;
+  document.getElementById('btn-redo').disabled = redoStack.length === 0;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// localStorage helpers
+// ─────────────────────────────────────────────────────────────────────────
+const LS_INDEX = 'infiniteCanvas_index'; // JSON array of { key, name, savedAt }
+
+function getIndex() {
+  try { return JSON.parse(localStorage.getItem(LS_INDEX)) || []; }
+  catch { return []; }
+}
+function setIndex(arr) {
+  localStorage.setItem(LS_INDEX, JSON.stringify(arr));
+}
+
+function saveDrawing(name) {
+  const key = currentDrawingKey || ('infiniteCanvas_drawing_' + Date.now());
+  const data = { strokes, viewport: { vpX, vpY, vpScale }, name, savedAt: Date.now() };
+  try {
+    localStorage.setItem(key, JSON.stringify(data));
+  } catch(e) {
+    showToast('Storage full — try clearing old drawings');
+    return;
+  }
+  // update index
+  let idx = getIndex();
+  const existing = idx.findIndex(e => e.key === key);
+  const entry = { key, name, savedAt: data.savedAt };
+  if (existing >= 0) idx[existing] = entry;
+  else idx.unshift(entry);
+  setIndex(idx);
+
+  currentDrawingKey = key;
+  currentDrawingName = name;
+  document.getElementById('current-drawing-name').textContent = name;
+  renderSidebar();
+  showToast('Saved "' + name + '"');
+}
+
+function loadDrawing(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) { showToast('Drawing not found'); return; }
+    const data = JSON.parse(raw);
+    strokes = data.strokes || [];
+    redoStack = [];
+    if (data.viewport) {
+      vpX = data.viewport.vpX; vpY = data.viewport.vpY; vpScale = data.viewport.vpScale;
+      document.getElementById('zoom-indicator').textContent = Math.round(vpScale * 100) + '%';
+    }
+    currentDrawingKey = key;
+    currentDrawingName = data.name || '';
+    document.getElementById('current-drawing-name').textContent = currentDrawingName;
+    document.getElementById('save-name').value = currentDrawingName;
+    updateUndoButtons();
+    render();
+    closeSidebar();
+    showToast('Loaded "' + currentDrawingName + '"');
+  } catch(e) {
+    showToast('Failed to load drawing');
+  }
+}
+
+function deleteDrawing(key) {
+  localStorage.removeItem(key);
+  let idx = getIndex().filter(e => e.key !== key);
+  setIndex(idx);
+  if (currentDrawingKey === key) {
+    currentDrawingKey = null;
+    currentDrawingName = '';
+    document.getElementById('current-drawing-name').textContent = '';
+  }
+  renderSidebar();
+  showToast('Deleted');
+}
+
+function renderSidebar() {
+  const list = document.getElementById('drawings-list');
+  const idx = getIndex();
+  if (!idx.length) {
+    list.innerHTML = '<div class="empty-state">No saved drawings yet</div>';
+    return;
+  }
+  list.innerHTML = '';
+  for (const entry of idx) {
+    const div = document.createElement('div');
+    div.className = 'drawing-entry' + (entry.key === currentDrawingKey ? ' current' : '');
+    div.innerHTML = `
+      <span class="drawing-entry-name">${escHtml(entry.name)}</span>
+      <span class="drawing-entry-meta">${fmtDate(entry.savedAt)}</span>
+      <button class="drawing-entry-del" title="Delete">✕</button>
+    `;
+    div.querySelector('.drawing-entry-del').addEventListener('click', ev => {
+      ev.stopPropagation();
+      if (confirm('Delete "' + entry.name + '"?')) deleteDrawing(entry.key);
+    });
+    div.addEventListener('click', () => loadDrawing(entry.key));
+    list.appendChild(div);
+  }
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function fmtDate(ts) {
+  const d = new Date(ts);
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Sidebar open/close
+// ─────────────────────────────────────────────────────────────────────────
+function openSidebar() {
+  document.getElementById('sidebar').classList.add('open');
+  document.body.classList.add('sidebar-open');
+  renderSidebar();
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.body.classList.remove('sidebar-open');
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Toast
+// ─────────────────────────────────────────────────────────────────────────
+let toastTimer = null;
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2000);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Input helpers
+// ─────────────────────────────────────────────────────────────────────────
+function getPos(e) {
+  const r = canvas.getBoundingClientRect();
+  if (e.touches) return { x: e.touches[0].clientX - r.left, y: e.touches[0].clientY - r.top };
+  return { x: e.clientX - r.left, y: e.clientY - r.top };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Mouse events
+// ─────────────────────────────────────────────────────────────────────────
+canvas.addEventListener('mousedown', e => {
+  if (e.button === 1 || (e.button === 0 && spaceDown)) {
+    isPanning = true;
+    panStart = { x: e.clientX, y: e.clientY };
+    vpAtPanStart = { x: vpX, y: vpY };
+    canvas.style.cursor = 'grab';
+    e.preventDefault();
+    return;
+  }
+  if (e.button !== 0) return;
+  const wp = screenToWorld(...Object.values(getPos(e)));
+  isDrawing = true;
+  currentStroke = { pts: [wp], size: brushSize, erase: tool === 'erase' };
+  render();
+});
+
+canvas.addEventListener('mousemove', e => {
+  if (isPanning) {
+    vpX = vpAtPanStart.x - (e.clientX - panStart.x) / vpScale;
+    vpY = vpAtPanStart.y - (e.clientY - panStart.y) / vpScale;
+    render(); return;
+  }
+  if (!isDrawing) return;
+  const wp = screenToWorld(...Object.values(getPos(e)));
+  currentStroke.pts.push(wp);
+  render();
+});
+
+function finishDraw() {
+  if (!isDrawing) return;
+  isDrawing = false;
+  if (currentStroke?.pts.length) pushStroke(currentStroke);
+  currentStroke = null;
+  render();
+}
+function finishPan() {
+  if (!isPanning) return;
+  isPanning = false;
+  canvas.style.cursor = spaceDown ? 'grab' : 'crosshair';
+}
+
+canvas.addEventListener('mouseup', e => { finishPan(); finishDraw(); });
+canvas.addEventListener('mouseleave', () => { finishDraw(); });
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+// Zoom
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const before = screenToWorld(e.clientX, e.clientY);
+  const factor = e.deltaY < 0 ? 1.1 : 0.9;
+  vpScale = Math.max(0.02, Math.min(50, vpScale * factor));
+  vpX = before.x - e.clientX / vpScale;
+  vpY = before.y - e.clientY / vpScale;
+  document.getElementById('zoom-indicator').textContent = Math.round(vpScale * 100) + '%';
+  render();
+}, { passive: false });
+
+// Keyboard
+window.addEventListener('keydown', e => {
+  // Don't intercept while typing in input
+  if (e.target.tagName === 'INPUT') return;
+  if (e.code === 'Space') { spaceDown = true; canvas.style.cursor = 'grab'; e.preventDefault(); return; }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); return; }
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'z'))) { e.preventDefault(); redo(); return; }
+  if (e.key === 'p' || e.key === 'P') setTool('pen');
+  if (e.key === 'e' || e.key === 'E') setTool('erase');
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); trySave(); }
+});
+window.addEventListener('keyup', e => {
+  if (e.code === 'Space') { spaceDown = false; canvas.style.cursor = 'crosshair'; }
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// Touch — Google Maps style
+//   1 finger  → draw
+//   2 fingers → pan + pinch-zoom simultaneously, with momentum on release
+// ─────────────────────────────────────────────────────────────────────────
+let touch2 = null;   // state of last 2-finger frame { midX, midY, dist, _vx, _vy }
+let momentum = null; // inertia after 2-finger lift
+
+function stopMomentum() {
+  if (momentum) { cancelAnimationFrame(momentum.rafId); momentum = null; }
+}
+
+function startMomentum(vx, vy) {
+  stopMomentum();
+  const tick = () => {
+    vx *= 0.91; vy *= 0.91;
+    if (Math.abs(vx) < 0.08 && Math.abs(vy) < 0.08) { momentum = null; return; }
+    vpX -= vx / vpScale;
+    vpY -= vy / vpScale;
+    render();
+    momentum.rafId = requestAnimationFrame(tick);
+  };
+  momentum = { vx, vy, rafId: requestAnimationFrame(tick) };
+}
+
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  stopMomentum();
+
+  if (e.touches.length >= 2) {
+    // Abort any in-progress drawing stroke — enter pan/zoom mode
+    if (isDrawing) {
+      isDrawing = false;
+      currentStroke = null;
+      render();
+    }
+    const t0 = e.touches[0], t1 = e.touches[1];
+    touch2 = {
+      midX: (t0.clientX + t1.clientX) / 2,
+      midY: (t0.clientY + t1.clientY) / 2,
+      dist: Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY),
+      _vx: 0, _vy: 0,
+    };
+    return;
+  }
+
+  // 1 finger → draw
+  touch2 = null;
+  const wp = screenToWorld(...Object.values(getPos(e)));
+  isDrawing = true;
+  currentStroke = { pts: [wp], size: brushSize, erase: tool === 'erase' };
+  render();
+}, { passive: false });
+
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+
+  if (e.touches.length >= 2) {
+    const t0 = e.touches[0], t1 = e.touches[1];
+    const midX = (t0.clientX + t1.clientX) / 2;
+    const midY = (t0.clientY + t1.clientY) / 2;
+    const dist  = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
+
+    if (touch2) {
+      // 1. Pinch-zoom: anchor the world point under the midpoint
+      const worldMid = screenToWorld(midX, midY);
+      vpScale = Math.max(0.02, Math.min(50, vpScale * (dist / touch2.dist)));
+      vpX = worldMid.x - midX / vpScale;
+      vpY = worldMid.y - midY / vpScale;
+
+      // 2. Pan: midpoint delta in screen space → world space
+      vpX -= (midX - touch2.midX) / vpScale;
+      vpY -= (midY - touch2.midY) / vpScale;
+
+      // Store velocity (screen pixels/frame) for momentum
+      touch2._vx = midX - touch2.midX;
+      touch2._vy = midY - touch2.midY;
+
+      document.getElementById('zoom-indicator').textContent = Math.round(vpScale * 100) + '%';
+      render();
+    }
+
+    touch2 = { midX, midY, dist, _vx: touch2?._vx ?? 0, _vy: touch2?._vy ?? 0 };
+    return;
+  }
+
+  // 1 finger → draw
+  if (!isDrawing) return;
+  const wp = screenToWorld(...Object.values(getPos(e)));
+  currentStroke.pts.push(wp);
+  render();
+}, { passive: false });
+
+canvas.addEventListener('touchend', e => {
+  e.preventDefault();
+
+  if (touch2 && e.touches.length < 2) {
+    // Fling: launch momentum from last known velocity
+    const vx = touch2._vx || 0;
+    const vy = touch2._vy || 0;
+    touch2 = null;
+    if (Math.hypot(vx, vy) > 0.5) startMomentum(vx, vy);
+    return;
+  }
+
+  touch2 = null;
+  finishDraw();
+}, { passive: false });
+
+canvas.addEventListener('touchcancel', e => {
+  touch2 = null;
+  stopMomentum();
+  finishDraw();
+}, { passive: false });
+
+// ─────────────────────────────────────────────────────────────────────────
+// UI wiring
+// ─────────────────────────────────────────────────────────────────────────
+function setTool(t) {
+  tool = t;
+  document.getElementById('btn-pen').classList.toggle('active', t === 'pen');
+  document.getElementById('btn-erase').classList.toggle('active', t === 'erase');
+}
+
+function trySave() {
+  const nameInput = document.getElementById('save-name');
+  const name = nameInput.value.trim() || currentDrawingName || ('Drawing ' + new Date().toLocaleTimeString());
+  nameInput.value = name;
+  // If the name changed from the loaded drawing, treat it as a brand new entry
+  if (currentDrawingKey && name !== currentDrawingName) {
+    currentDrawingKey = null;
+  }
+  saveDrawing(name);
+}
+
+document.getElementById('btn-pen').addEventListener('click', () => setTool('pen'));
+document.getElementById('btn-erase').addEventListener('click', () => setTool('erase'));
+document.getElementById('btn-undo').addEventListener('click', undo);
+document.getElementById('btn-redo').addEventListener('click', redo);
+document.getElementById('btn-clear').addEventListener('click', () => {
+  if (!strokes.length) return;
+  // Push all current strokes onto redo stack so Ctrl+Z can restore them
+  redoStack.push(...[...strokes].reverse());
+  strokes = [];
+  updateUndoButtons();
+  render();
+  showToast('Canvas cleared — Ctrl+Z to undo');
+});
+document.getElementById('btn-library').addEventListener('click', () => {
+  document.getElementById('sidebar').classList.contains('open') ? closeSidebar() : openSidebar();
+});
+document.getElementById('btn-close-sidebar').addEventListener('click', closeSidebar);
+document.getElementById('btn-save').addEventListener('click', trySave);
+document.getElementById('save-name').addEventListener('keydown', e => {
+  if (e.key === 'Enter') trySave();
+});
+document.getElementById('size-slider').addEventListener('input', e => {
+  brushSize = parseInt(e.target.value);
+});
+
+document.getElementById('btn-download').addEventListener('click', () => {
+  // Render onto a temporary canvas with black background (JPEG has no transparency)
+  const tmp = document.createElement('canvas');
+  tmp.width = canvas.width;
+  tmp.height = canvas.height;
+  const tctx = tmp.getContext('2d');
+  tctx.fillStyle = '#000';
+  tctx.fillRect(0, 0, tmp.width, tmp.height);
+  // Draw all strokes at current viewport
+  tctx.save();
+  tctx.scale(vpScale, vpScale);
+  tctx.translate(-vpX, -vpY);
+  for (const s of strokes) {
+    const pts = s.pts;
+    if (!pts.length) continue;
+    tctx.save();
+    if (s.erase) {
+      tctx.globalCompositeOperation = 'destination-out';
+      tctx.strokeStyle = 'rgba(0,0,0,1)';
+    } else {
+      tctx.globalCompositeOperation = 'source-over';
+      tctx.strokeStyle = '#fff';
+    }
+    tctx.lineWidth = s.size;
+    tctx.lineCap = 'round';
+    tctx.lineJoin = 'round';
+    tctx.beginPath();
+    tctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) {
+      if (i < pts.length - 1) {
+        const mx = (pts[i].x + pts[i+1].x) / 2;
+        const my = (pts[i].y + pts[i+1].y) / 2;
+        tctx.quadraticCurveTo(pts[i].x, pts[i].y, mx, my);
+      } else {
+        tctx.lineTo(pts[i].x, pts[i].y);
+      }
+    }
+    tctx.stroke();
+    tctx.restore();
+  }
+  tctx.restore();
+
+  const filename = (currentDrawingName || 'drawing') + '.jpg';
+  tmp.toBlob(blob => {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.download = filename;
+    link.href = url;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    showToast('Downloaded "' + filename + '"');
+  }, 'image/jpeg', 0.95);
+});
+
+window.addEventListener('resize', resize);
+resize();
+updateUndoButtons();
+</script>
+</body>
+</html>
